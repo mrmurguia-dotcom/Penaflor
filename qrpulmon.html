@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JDE Scanner Pro + Excel Export</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Librerías Externas -->
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;800&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+        }
+
+        .jde-panel {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+        }
+
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        #reader {
+            width: 100%;
+            border-radius: 12px;
+            overflow: hidden;
+            border: none !important;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        }
+
+        /* Estilo para simular celdas de Excel en el historial visual */
+        .history-grid {
+            display: grid;
+            grid-template-columns: 2fr 4fr 3fr 1fr;
+            gap: 4px;
+            font-size: 10px;
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 flex flex-col items-center">
+
+    <!-- Header -->
+    <header class="w-full max-w-4xl mb-6 flex justify-between items-center bg-blue-900/40 p-4 rounded-xl border border-blue-500/30 shadow-lg">
+        <div>
+            <h1 class="text-xl font-extrabold text-blue-400 tracking-tight">JDE LOGISTICS</h1>
+            <p class="text-[10px] text-blue-200 opacity-70 uppercase tracking-widest">Generador de Reportes Excel v4.0</p>
+        </div>
+        <button onclick="toggleCamera()" id="cam-toggle-btn" class="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg font-bold text-xs uppercase tracking-wider transition-all">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            <span id="cam-btn-text">Cámara</span>
+        </button>
+    </header>
+
+    <main class="w-full max-w-4xl space-y-6">
+
+        <!-- Lector de Cámara -->
+        <div id="camera-container" class="hidden jde-panel rounded-2xl p-4 overflow-hidden border-2 border-blue-500/50 shadow-2xl">
+            <div id="reader"></div>
+            <p class="text-center text-[10px] text-slate-400 mt-2 font-bold uppercase tracking-widest">Enfoque el código</p>
+        </div>
+
+        <!-- Entrada de Datos -->
+        <div class="jde-panel rounded-2xl p-6 shadow-md">
+            <label class="block text-xs font-bold text-slate-400 mb-2 ml-1 uppercase">Esperando entrada (Pistola Láser o Cámara)</label>
+            <input type="text" id="scanner-field" 
+                class="w-full bg-slate-900 border-2 border-slate-700 rounded-xl p-4 text-xl mono text-white outline-none focus:border-blue-500 transition-all placeholder-slate-800"
+                placeholder="Escanee aquí..."
+                autocomplete="off"
+                autofocus>
+        </div>
+
+        <!-- Visualización de Datos Actuales -->
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+            <div class="md:col-span-8 grid grid-cols-2 gap-4">
+                <div class="jde-panel rounded-xl p-4 border-l-4 border-l-blue-500 shadow-sm">
+                    <span class="text-[10px] uppercase text-slate-500 font-bold">Artículo (SKU)</span>
+                    <div id="out-art" class="text-3xl font-mono text-blue-300 font-bold">-</div>
+                </div>
+                <div class="jde-panel rounded-xl p-4 border-l-4 border-l-green-500 shadow-sm">
+                    <span class="text-[10px] uppercase text-slate-500 font-bold">Cantidad</span>
+                    <div id="out-cant" class="text-3xl font-bold text-white">-</div>
+                </div>
+                <div class="col-span-2 jde-panel rounded-xl p-4 border-l-4 border-l-yellow-600 shadow-sm">
+                    <span class="text-[10px] uppercase text-slate-500 font-bold">Lote / Número de Serie</span>
+                    <div id="out-lote" class="text-2xl font-mono text-yellow-500">-</div>
+                </div>
+                <div class="jde-panel rounded-xl p-4 border-l-4 border-l-purple-500 shadow-sm">
+                    <span class="text-[10px] uppercase text-slate-500 font-bold">Tipo Mov.</span>
+                    <div id="out-tipo" class="text-xl font-bold text-white">-</div>
+                </div>
+                <div class="jde-panel rounded-xl p-4 border-l-4 border-l-pink-500 shadow-sm">
+                    <span class="text-[10px] uppercase text-slate-500 font-bold">Hora Lectura</span>
+                    <div id="out-hora" class="text-xl font-mono text-pink-300">-</div>
+                </div>
+            </div>
+
+            <!-- Panel de Acciones y Resumen -->
+            <div class="md:col-span-4 flex flex-col gap-4">
+                <div class="jde-panel rounded-xl p-5 flex flex-col justify-between flex-grow shadow-xl border-t-4 border-t-green-500">
+                    <div>
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-xs font-bold text-slate-400 uppercase">Resumen de Sesión</h3>
+                            <span id="scan-count" class="bg-green-600 text-white text-xs px-3 py-1 rounded-full font-bold">0</span>
+                        </div>
+                        <div id="history-list" class="space-y-2 max-h-[220px] overflow-y-auto pr-2 custom-scroll">
+                            <p class="text-center text-[10px] text-slate-600 italic py-10">Sin registros</p>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 pt-4 border-t border-slate-700 space-y-3">
+                        <button onclick="exportToExcel()" class="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                            Exportar .XLSX
+                        </button>
+                        <button onclick="clearSession()" class="w-full text-red-400 text-[10px] font-bold uppercase hover:text-red-300 transition-colors">Limpiar Base</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-6 bg-blue-600 text-white px-8 py-4 rounded-2xl font-bold shadow-2xl transition-all duration-500 translate-y-32 opacity-0 z-50">
+        DATOS REGISTRADOS
+    </div>
+
+    <script>
+        const input = document.getElementById('scanner-field');
+        const historyList = document.getElementById('history-list');
+        const scanCount = document.getElementById('scan-count');
+        const camContainer = document.getElementById('camera-container');
+        
+        let html5QrCode = null;
+        let sessionData = [];
+        let bufferTimeout = null;
+
+        // Foco automático
+        document.addEventListener('click', (e) => {
+            if(e.target.tagName !== 'BUTTON' && !e.target.closest('button')) input.focus();
+        });
+
+        // Cámara
+        async function toggleCamera() {
+            if (!html5QrCode) {
+                camContainer.classList.remove('hidden');
+                document.getElementById('cam-btn-text').textContent = "Cerrar";
+                html5QrCode = new Html5Qrcode("reader");
+                try {
+                    await html5QrCode.start({ facingMode: "environment" }, { fps: 15, qrbox: 250 }, onScanSuccess);
+                } catch (err) {
+                    alert("Error cámara: " + err);
+                    stopCamera();
+                }
+            } else {
+                stopCamera();
+            }
+        }
+
+        async function stopCamera() {
+            if (html5QrCode) {
+                await html5QrCode.stop();
+                html5QrCode = null;
+            }
+            camContainer.classList.add('hidden');
+            document.getElementById('cam-btn-text').textContent = "Cámara";
+            input.focus();
+        }
+
+        function onScanSuccess(decodedText) {
+            processData(decodedText);
+            html5QrCode.pause();
+            setTimeout(() => html5QrCode.resume(), 1200);
+        }
+
+        // Entrada Teclado/Láser
+        input.addEventListener('input', (e) => {
+            const val = e.target.value;
+            if (!val) return;
+            clearTimeout(bufferTimeout);
+            bufferTimeout = setTimeout(() => {
+                processData(val);
+                input.value = "";
+            }, 150);
+        });
+
+        function processData(rawText) {
+            const clean = rawText.trim();
+            if (clean === "") return;
+
+            let parsed = {
+                Lectura_Original: clean,
+                Tipo: clean.substring(0, 1) || "-",
+                Articulo: clean.length >= 9 ? clean.substring(1, 9).trim() : clean,
+                Lote: clean.length >= 26 ? clean.substring(9, 26).trim() : "-",
+                Cantidad: clean.length >= 30 ? parseInt(clean.substring(26, 30)) || 0 : 0,
+                Hora_Etiqueta: "-",
+                Fecha_Registro: new Date().toLocaleDateString(),
+                Hora_Registro: new Date().toLocaleTimeString()
+            };
+
+            if (clean.length >= 36) {
+                const h = clean.substring(30, 36);
+                parsed.Hora_Etiqueta = `${h.substring(0,2)}:${h.substring(2,4)}:${h.substring(4,6)}`;
+            }
+
+            // Actualizar Interfaz
+            document.getElementById('out-art').textContent = parsed.Articulo;
+            document.getElementById('out-cant').textContent = parsed.Cantidad;
+            document.getElementById('out-lote').textContent = parsed.Lote;
+            document.getElementById('out-tipo').textContent = parsed.Tipo;
+            document.getElementById('out-hora').textContent = parsed.Hora_Etiqueta;
+
+            sessionData.unshift(parsed);
+            updateHistoryUI();
+            showToast();
+        }
+
+        function updateHistoryUI() {
+            scanCount.textContent = sessionData.length;
+            if (sessionData.length === 0) {
+                historyList.innerHTML = '<p class="text-center text-[10px] text-slate-600 italic py-10">Sin registros</p>';
+                return;
+            }
+            historyList.innerHTML = sessionData.map(d => `
+                <div class="bg-slate-800 p-2 rounded border border-slate-700 text-[10px] animate-slide">
+                    <div class="flex justify-between font-bold text-blue-400">
+                        <span>${d.Articulo}</span>
+                        <span class="text-green-500">${d.Cantidad}</span>
+                    </div>
+                    <div class="text-[8px] text-slate-500 truncate">${d.Lote}</div>
+                </div>
+            `).join('');
+        }
+
+        function showToast() {
+            const t = document.getElementById('toast');
+            t.classList.remove('translate-y-32', 'opacity-0');
+            setTimeout(() => t.classList.add('translate-y-32', 'opacity-0'), 1500);
+        }
+
+        function clearSession() {
+            if(!confirm("¿Desea borrar todos los datos de la sesión actual?")) return;
+            sessionData = [];
+            updateHistoryUI();
+            ['out-art','out-cant','out-lote','out-tipo','out-hora'].forEach(id => document.getElementById(id).textContent = "-");
+        }
+
+        // EXPORTACIÓN A EXCEL (.xlsx)
+        function exportToExcel() {
+            if (sessionData.length === 0) return alert("No hay datos para exportar");
+
+            // Crear un nuevo libro de trabajo (Workbook)
+            const wb = XLSX.utils.book_new();
+            
+            // Convertir JSON a hoja de cálculo (Worksheet)
+            // Esto tomará los nombres de las propiedades de nuestro objeto como encabezados
+            const ws = XLSX.utils.json_to_sheet(sessionData);
+
+            // Ajustar anchos de columna (opcional pero recomendado)
+            const wscols = [
+                {wch: 40}, // Lectura_Original
+                {wch: 5},  // Tipo
+                {wch: 15}, // Articulo
+                {wch: 20}, // Lote
+                {wch: 10}, // Cantidad
+                {wch: 15}, // Hora_Etiqueta
+                {wch: 15}, // Fecha_Registro
+                {wch: 15}  // Hora_Registro
+            ];
+            ws['!cols'] = wscols;
+
+            // Añadir la hoja al libro
+            XLSX.utils.book_append_sheet(wb, ws, "Lecturas JDE");
+
+            // Generar archivo y descargar
+            const fileName = `Reporte_JDE_${new Date().toISOString().slice(0,10)}_${new Date().getTime()}.xlsx`;
+            XLSX.writeFile(wb, fileName);
+        }
+    </script>
+
+    <style>
+        .custom-scroll::-webkit-scrollbar { width: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        @keyframes slide { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: translateX(0); } }
+        .animate-slide { animation: slide 0.3s ease-out; }
+    </style>
+</body>
+</html>
